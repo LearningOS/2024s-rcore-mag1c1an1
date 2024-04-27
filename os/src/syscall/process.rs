@@ -1,9 +1,8 @@
 //! Process management syscalls
 use crate::{
     config::MAX_SYSCALL_NUM,
-    task::{
-        change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus,
-    },
+    task::{exit_current_and_run_next, suspend_current_and_run_next, task_info, TaskStatus},
+    timer::{get_time, get_time_us, ticks_to_ms},
 };
 
 #[repr(C)]
@@ -47,11 +46,17 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 }
 
 /// YOUR JOB: Finish sys_task_info to pass testcases
-/// HINT: You might reimplement it with virtual memory management.
-/// HINT: What if [`TaskInfo`] is splitted by two pages ?
-pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
-    trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
-    -1
+pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
+    trace!("kernel: sys_task_info");
+    let (status, syscall_times, start_time) = task_info();
+    unsafe {
+        *ti = TaskInfo {
+            status,
+            syscall_times,
+            time: ticks_to_ms(get_time() - start_time),
+        }
+    }
+    0
 }
 
 // YOUR JOB: Implement mmap.

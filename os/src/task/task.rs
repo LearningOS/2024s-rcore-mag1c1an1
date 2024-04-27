@@ -1,4 +1,7 @@
 //! Types related to task management
+
+use crate::config::MAX_SYSCALL_NUM;
+
 use super::TaskContext;
 use crate::config::TRAP_CONTEXT_BASE;
 use crate::mm::{
