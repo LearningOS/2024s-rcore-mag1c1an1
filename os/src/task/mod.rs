@@ -21,11 +21,14 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
-use crate::loader::{get_num_app, init_app_cx};
+use crate::config::MAX_SYSCALL_NUM;
+use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapPermission, VPNRange, VirtAddr, VirtPageNum};
 use crate::sbi::shutdown;
 use crate::sync::UPSafeCell;
-use crate::timer::get_time;
+use crate::timer::get_time_us;
+use crate::trap::TrapContext;
+use alloc::vec::Vec;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
 use switch::__switch;
@@ -117,4 +120,26 @@ lazy_static! {
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
+}
+
+/// update syscall_times
+pub fn update_syscall_times(syscall_id: usize) {
+    TASK_MANAGER.update_syscall_times(syscall_id);
+}
+
+/// get task info
+pub fn task_info() -> (TaskStatus, [u32; MAX_SYSCALL_NUM], usize) {
+    let mut x = TASK_MANAGER.task_info();
+    x.2 = (get_time_us() - x.2) / 1000;
+    x
+}
+
+/// map memory
+pub fn mmap(start: usize, len: usize, port: usize) -> isize {
+    TASK_MANAGER.mmap(start, len, port)
+}
+
+/// unmap memory
+pub fn munmap(start: usize, len: usize) -> isize {
+    TASK_MANAGER.munmap(start, len)
 }

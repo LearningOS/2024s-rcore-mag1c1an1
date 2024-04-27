@@ -117,44 +117,65 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 /// YOUR JOB: get time with second and microsecond
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
-pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
-}
+pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
+    trace!("kernel: sys_get_time");
 
-/// YOUR JOB: Finish sys_task_info to pass testcases
-pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
-    trace!("kernel: sys_task_info");
-    let (status, syscall_times, start_time) = task_info();
+    let buffers =
+        translated_byte_buffer(current_user_token(), ts as *const u8, size_of::<TimeVal>());
+    let us = get_time_us();
+    let tmp = TimeVal {
+        sec: us / 1_000_000,
+        usec: us % 1_000_000,
+    };
     unsafe {
-        *ti = TaskInfo {
-            status,
-            syscall_times,
-            time: ticks_to_ms(get_time() - start_time),
+        let src: [u8; size_of::<TimeVal>()] = transmute(tmp);
+        let mut idx = 0;
+        for buffer in buffers {
+            for b in buffer {
+                *b = src[idx];
+                idx += 1;
+            }
         }
     }
     0
 }
 
-/// YOUR JOB: Implement mmap.
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_mmap NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+/// YOUR JOB: Finish sys_task_info to pass testcases
+pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
+    trace!("kernel: sys_task_info!");
+    let (status, syscall_times, time) = task_info();
+    let tmp = TaskInfo {
+        status,
+        syscall_times,
+        time,
+    };
+    let buffers =
+        translated_byte_buffer(current_user_token(), ti as *const u8, size_of::<TaskInfo>());
+    unsafe {
+        // copy to buffer
+        //  may not contiuous memory
+        let src: [u8; size_of::<TaskInfo>()] = transmute(tmp);
+        let mut idx = 0;
+        for buffer in buffers {
+            for b in buffer {
+                *b = src[idx];
+                idx += 1;
+            }
+        }
+    }
+    0
 }
 
-/// YOUR JOB: Implement munmap.
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_munmap NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+// YOUR JOB: Implement mmap.
+pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
+    trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
+    mmap(start, len, port)
+}
+
+// YOUR JOB: Implement munmap.
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
+    munmap(start, len)
 }
 
 /// change data segment size
