@@ -63,6 +63,13 @@ impl MemorySet {
             None,
         );
     }
+    /// unmap vpns
+    pub fn munmap(&mut self, vpn_range: VPNRange) {
+        for vpn in vpn_range {
+            self.page_table.unmap(vpn);
+        }
+    }
+
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
