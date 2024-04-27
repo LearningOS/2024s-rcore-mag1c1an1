@@ -120,3 +120,25 @@ lazy_static! {
 pub fn add_initproc() {
     add_task(INITPROC.clone());
 }
+
+/// update syscall_times
+pub fn update_syscall_times(syscall_id: usize) {
+    TASK_MANAGER.update_syscall_times(syscall_id);
+}
+
+/// get task info
+pub fn task_info() -> (TaskStatus, [u32; MAX_SYSCALL_NUM], usize) {
+    let mut x = TASK_MANAGER.task_info();
+    x.2 = (get_time_us() - x.2) / 1000;
+    x
+}
+
+/// map memory
+pub fn mmap(start: usize, len: usize, port: usize) -> isize {
+    TASK_MANAGER.mmap(start, len, port)
+}
+
+/// unmap memory
+pub fn munmap(start: usize, len: usize) -> isize {
+    TASK_MANAGER.munmap(start, len)
+}
