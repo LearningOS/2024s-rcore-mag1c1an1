@@ -21,8 +21,11 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::loader::get_app_data_by_name;
-use alloc::sync::Arc;
+use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
+use crate::loader::{get_num_app, init_app_cx};
+use crate::sbi::shutdown;
+use crate::sync::UPSafeCell;
+use crate::timer::get_time;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
 use switch::__switch;
