@@ -29,3 +29,8 @@ pub fn get_time_us() -> usize {
 pub fn set_next_trigger() {
     set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
 }
+
+/// convert time tick to milliseconds
+pub fn ticks_to_ms(ticks: usize) -> usize {
+    ticks * MSEC_PER_SEC / CLOCK_FREQ
+}
