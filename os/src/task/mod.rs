@@ -21,14 +21,8 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::MAX_SYSCALL_NUM;
-use crate::loader::{get_app_data, get_num_app};
-use crate::mm::{MapPermission, VPNRange, VirtAddr, VirtPageNum};
-use crate::sbi::shutdown;
-use crate::sync::UPSafeCell;
-use crate::timer::get_time_us;
-use crate::trap::TrapContext;
-use alloc::vec::Vec;
+use crate::loader::get_app_data_by_name;
+use alloc::sync::Arc;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
 use switch::__switch;
@@ -38,8 +32,8 @@ pub use context::TaskContext;
 pub use id::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 pub use manager::add_task;
 pub use processor::{
-    current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
-    Processor,
+    current_task, current_trap_cx, current_user_token, mmap, munmap, run_tasks, schedule,
+    take_current_task, task_info, update_syscall_times, Processor,
 };
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
@@ -120,26 +114,4 @@ lazy_static! {
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
-}
-
-/// update syscall_times
-pub fn update_syscall_times(syscall_id: usize) {
-    TASK_MANAGER.update_syscall_times(syscall_id);
-}
-
-/// get task info
-pub fn task_info() -> (TaskStatus, [u32; MAX_SYSCALL_NUM], usize) {
-    let mut x = TASK_MANAGER.task_info();
-    x.2 = (get_time_us() - x.2) / 1000;
-    x
-}
-
-/// map memory
-pub fn mmap(start: usize, len: usize, port: usize) -> isize {
-    TASK_MANAGER.mmap(start, len, port)
-}
-
-/// unmap memory
-pub fn munmap(start: usize, len: usize) -> isize {
-    TASK_MANAGER.munmap(start, len)
 }
