@@ -54,6 +54,12 @@ impl MemorySet {
     pub fn token(&self) -> usize {
         self.page_table.token()
     }
+    /// dummy
+    pub fn munmap(&mut self, vpn_range: VPNRange) {
+        for vpn in vpn_range {
+            self.page_table.unmap(vpn);
+        }
+    }
     /// Assume that no conflicts.
     pub fn insert_framed_area(
         &mut self,

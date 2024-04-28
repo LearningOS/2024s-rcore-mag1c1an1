@@ -23,7 +23,39 @@ impl TaskManager {
     }
     /// Take a process out of the ready queue
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
-        self.ready_queue.pop_front()
+        debug!("[");
+        for t in self.ready_queue.iter() {
+            debug!("   {}", t.stride());
+        }
+        debug!("]");
+
+        if self.ready_queue.is_empty() {
+            debug!("None");
+            None
+        } else {
+            let mut idx = 0usize;
+            for i in 1..self.ready_queue.len() {
+                match self.ready_queue[idx]
+                    .stride()
+                    .partial_cmp(&self.ready_queue[i].stride())
+                {
+                    Some(ord) => match ord {
+                        core::cmp::Ordering::Less => {}
+                        core::cmp::Ordering::Equal => todo!(),
+                        core::cmp::Ordering::Greater => idx = i,
+                    },
+                    None => todo!(),
+                }
+            }
+            debug!("idx: {idx}");
+            self.ready_queue.remove(idx)
+        }
+    }
+}
+
+impl Default for TaskManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -7,7 +7,9 @@
 use super::__switch;
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
+use crate::config::MAX_SYSCALL_NUM;
 use crate::sync::UPSafeCell;
+use crate::timer::get_time_us;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
@@ -42,7 +44,13 @@ impl Processor {
 
     ///Get current task in cloning semanteme
     pub fn current(&self) -> Option<Arc<TaskControlBlock>> {
-        self.current.as_ref().map(Arc::clone)
+        self.current.clone()
+    }
+}
+
+impl Default for Processor {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -61,6 +69,11 @@ pub fn run_tasks() {
             let mut task_inner = task.inner_exclusive_access();
             let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
             task_inner.task_status = TaskStatus::Running;
+            debug!("[kernel]: pid[{}] start runing", task.pid.0);
+            if task_inner.start_time == 0 {
+                task_inner.start_time = get_time_us();
+            }
+
             // release coming task_inner manually
             drop(task_inner);
             // release coming task TCB manually
@@ -101,6 +114,7 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 }
 
 ///Return to idle control flow for new scheduling
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
     let mut processor = PROCESSOR.exclusive_access();
     let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
@@ -108,4 +122,32 @@ pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
     unsafe {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
     }
+}
+
+/// get task info
+pub fn task_info() -> (TaskStatus, [u32; MAX_SYSCALL_NUM], usize) {
+    let processor = PROCESSOR.exclusive_access();
+    let (status, syscall_times, stime) = processor.current().unwrap().task_info();
+    (status, syscall_times, (get_time_us() - stime) / 1000)
+}
+
+/// mmap memory
+pub fn mmap(start: usize, len: usize, port: usize) -> isize {
+    let processor = PROCESSOR.exclusive_access();
+    processor.current().unwrap().mmap(start, len, port)
+}
+
+/// unmap memory
+pub fn munmap(start: usize, len: usize) -> isize {
+    let processor = PROCESSOR.exclusive_access();
+    processor.current().unwrap().munmap(start, len)
+}
+
+/// update syscall times
+pub fn update_syscall_times(syscall_id: usize) {
+    let processor = PROCESSOR.exclusive_access();
+    processor
+        .current()
+        .unwrap()
+        .update_syscall_times(syscall_id);
 }
