@@ -6,7 +6,9 @@ use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::config::TRAP_CONTEXT_BASE;
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::mm::{
+    MapPermission, MemorySet, PhysPageNum, VPNRange, VirtAddr, VirtPageNum, KERNEL_SPACE,
+};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
@@ -71,7 +73,8 @@ impl TaskControlBlock {
 
         let svpn = VirtPageNum::from(sva);
         let evpn = eva.ceil();
-        let vpn_range = VPNRange::new(svpn, evpn);
+        let var_name = VPNRange::new(svpn, evpn);
+        let vpn_range = var_name;
         for vpn in vpn_range {
             if let Some(pte) = ms.translate(vpn) {
                 if pte.is_valid() {
@@ -281,21 +284,31 @@ impl TaskControlBlock {
         let pid_handle = pid_alloc();
         let kernel_stack = kstack_alloc();
         let kernel_stack_top = kernel_stack.get_top();
+        // copy fd table
+        let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
+        for fd in parent_inner.fd_table.iter() {
+            if let Some(file) = fd {
+                new_fd_table.push(Some(file.clone()));
+            } else {
+                new_fd_table.push(None);
+            }
+        }
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
             kernel_stack,
             inner: unsafe {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
-                    base_size: user_sp,
+                    base_size: parent_inner.base_size,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                     task_status: TaskStatus::Ready,
                     memory_set,
                     parent: Some(Arc::downgrade(self)),
                     children: Vec::new(),
                     exit_code: 0,
-                    heap_bottom: user_sp,
-                    program_brk: user_sp,
+                    fd_table: new_fd_table,
+                    heap_bottom: parent_inner.heap_bottom,
+                    program_brk: parent_inner.program_brk,
                     start_time: 0,
                     syscall_times: [0; MAX_SYSCALL_NUM],
                     stride: Stride(0),

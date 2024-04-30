@@ -76,7 +76,7 @@ impl EasyFileSystem {
         get_block_cache(root_inode_block_id as usize, Arc::clone(&block_device))
             .lock()
             .modify(root_inode_offset, |disk_inode: &mut DiskInode| {
-                disk_inode.initialize(DiskInodeType::Directory);
+                disk_inode.initialize(0, DiskInodeType::Directory);
             });
         block_cache_sync_all();
         Arc::new(Mutex::new(efs))
@@ -130,6 +130,20 @@ impl EasyFileSystem {
         self.inode_bitmap.alloc(&self.block_device).unwrap() as u32
     }
 
+    /// Dealloc disk inode
+    /// just clean inode itself
+    /// inner data igonre
+    pub fn dealloc_disk_inode(&mut self, inode_id: u32) {
+        get_block_cache(inode_id as usize, Arc::clone(&self.block_device))
+            .lock()
+            .modify(0, |disk_inode: &mut DataBlock| {
+                disk_inode.iter_mut().for_each(|p| *p = 0);
+            });
+        self.inode_bitmap.dealloc(
+            &self.block_device,
+            (inode_id - self.inode_area_start_block) as usize,
+        );
+    }
     /// Allocate a data block
     pub fn alloc_data(&mut self) -> u32 {
         self.data_bitmap.alloc(&self.block_device).unwrap() as u32 + self.data_area_start_block
