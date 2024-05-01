@@ -49,6 +49,20 @@ pub struct ProcessControlBlockInner {
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+    /// enable deadlock detection? default is false
+    pub deadlock_detect: bool,
+    /// avaiable mutex matirx
+    pub available_mutex: Vec<Option<usize>>,
+    /// allocatioin matirx
+    pub allocation_mutex: Vec<Option<Vec<Option<usize>>>>,
+    /// mutex need matrix
+    pub need_mutex: Vec<Option<Vec<Option<usize>>>>,
+    /// avaiable sem matrix
+    pub available_sem: Vec<Option<usize>>,
+    /// allocation sem matrix
+    pub allocation_sem: Vec<Option<Vec<Option<usize>>>>,
+    /// semaphore need matrix
+    pub need_sem: Vec<Option<Vec<Option<usize>>>>,
 }
 
 impl ProcessControlBlockInner {
@@ -81,6 +95,122 @@ impl ProcessControlBlockInner {
     /// get a task with tid in this process
     pub fn get_task(&self, tid: usize) -> Arc<TaskControlBlock> {
         self.tasks[tid].as_ref().unwrap().clone()
+    }
+    /// get all tids
+    pub fn tids(&self) -> Vec<usize> {
+        self.tasks
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| item.is_some())
+            .map(|(id, _)| id)
+            .collect()
+    }
+    /// get avaiable mutex default
+    pub fn avaiable_mutex_start(&self) -> Vec<Option<usize>> {
+        let mut ret = self.available_mutex.clone();
+        for v in ret.iter_mut() {
+            if v.is_some() {
+                *v = Some(0);
+            }
+        }
+        ret
+    }
+    /// get avaiable sem default
+    pub fn avaiable_sem_start(&self) ->Vec<Option<usize>> {
+        let mut ret = self.available_sem.clone();
+        for v in ret.iter_mut() {
+            if v.is_some() {
+                *v = Some(0);
+            }
+        }
+        ret
+    }
+    /// detect deadlock only care mutex
+    pub fn mutex_deadlock_detect(&self, mutex_id: usize) -> Option<bool> {
+        if !self.deadlock_detect {
+            return None;
+        }
+        // init
+        let mut work = self.available_mutex.clone();
+        let mut finish = Vec::new();
+        for x in self.tasks.iter() {
+            if x.is_none() {
+                finish.push(None);
+            } else {
+                finish.push(Some(false));
+            }
+        }
+
+        debug!("work: {:?}", work);
+        debug!("finish: {:?}", finish);
+
+        // find
+        let mut done = -1;
+        while done < finish.len() as i32 - 1 {
+            for (i, item) in finish.iter_mut().enumerate() {
+                done = i as i32;
+                if let Some(need) = &self.need_mutex[i] {
+                    if need[mutex_id] <= work[mutex_id] && *item == Some(false) {
+                        *work[mutex_id].as_mut().unwrap() +=
+                            self.allocation_mutex[i].as_ref().unwrap()[mutex_id].unwrap();
+                        *item = Some(true);
+                        break;
+                    }
+                }
+            }
+        }
+
+        for x in finish.into_iter().flatten() {
+            if !x {
+                error!("mutex deadlock detected");
+                return Some(true);
+            }
+        }
+        Some(false)
+    }
+
+    /// detect deadlock only care semaphore
+    pub fn sem_deadlock_detect(&self, sem_id: usize) -> Option<bool> {
+        if !self.deadlock_detect {
+            return None;
+        }
+        // init
+        let mut work = self.available_sem.clone();
+        let mut finish = Vec::new();
+        for x in self.tasks.iter() {
+            if x.is_none() {
+                finish.push(None);
+            } else {
+                finish.push(Some(false));
+            }
+        }
+
+        debug!("work: {:?}", work);
+        debug!("finish: {:?}", finish);
+
+        // find
+        let mut done = -1;
+        while done < finish.len() as i32 - 1 {
+            for (i, item) in finish.iter_mut().enumerate() {
+                done = i as i32;
+                if let Some(need) = &self.need_sem[i] {
+                    if need[sem_id] <= work[sem_id] && *item == Some(false) {
+                        *work[sem_id].as_mut().unwrap() +=
+                            self.allocation_sem[i].as_ref().unwrap()[sem_id].unwrap();
+                        *item = Some(true);
+                        break;
+                    }
+                }
+            }
+        }
+
+        for x in finish.into_iter().flatten() {
+            if !x {
+                error!("mutex deadlock detected");
+                return Some(true);
+            }
+        }
+        Some(false)
     }
 }
 
@@ -119,6 +249,13 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    deadlock_detect: false,
+                    available_mutex: Vec::new(),
+                    allocation_mutex: Vec::new(),
+                    need_mutex: Vec::new(),
+                    available_sem: Vec::new(),
+                    allocation_sem: Vec::new(),
+                    need_sem: Vec::new(),
                 })
             },
         });
@@ -144,6 +281,13 @@ impl ProcessControlBlock {
         // add main thread to the process
         let mut process_inner = process.inner_exclusive_access();
         process_inner.tasks.push(Some(Arc::clone(&task)));
+
+        process_inner.allocation_mutex.push(Some(Vec::new()));
+        process_inner.need_mutex.push(Some(Vec::new()));
+
+        process_inner.allocation_sem.push(Some(Vec::new()));
+        process_inner.need_sem.push(Some(Vec::new()));
+
         drop(process_inner);
         insert_into_pid2process(process.getpid(), Arc::clone(&process));
         // add main thread to scheduler
@@ -245,6 +389,13 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    deadlock_detect: false,
+                    available_mutex: Vec::new(),
+                    allocation_mutex: Vec::new(),
+                    need_mutex: Vec::new(),
+                    available_sem: Vec::new(),
+                    allocation_sem: Vec::new(),
+                    need_sem: Vec::new(),
                 })
             },
         });
@@ -267,6 +418,10 @@ impl ProcessControlBlock {
         // attach task to child process
         let mut child_inner = child.inner_exclusive_access();
         child_inner.tasks.push(Some(Arc::clone(&task)));
+        child_inner.allocation_mutex.push(Some(Vec::new()));
+        child_inner.need_mutex.push(Some(Vec::new()));
+        child_inner.allocation_sem.push(Some(Vec::new()));
+        child_inner.need_sem.push(Some(Vec::new()));
         drop(child_inner);
         // modify kstack_top in trap_cx of this thread
         let task_inner = task.inner_exclusive_access();

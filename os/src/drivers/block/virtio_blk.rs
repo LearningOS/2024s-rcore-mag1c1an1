@@ -47,6 +47,12 @@ impl VirtIOBlock {
     }
 }
 
+impl Default for VirtIOBlock {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct VirtioHal;
 
 impl Hal for VirtioHal {

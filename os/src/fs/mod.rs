@@ -1,5 +1,5 @@
 //! File trait & inode(dir, file, pipe, stdin, stdout)
-
+#![allow(clippy::bad_bit_mask)]
 mod inode;
 mod pipe;
 mod stdio;

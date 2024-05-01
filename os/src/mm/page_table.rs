@@ -70,6 +70,12 @@ pub struct PageTable {
     frames: Vec<FrameTracker>,
 }
 
+impl Default for PageTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Assume that it won't oom when creating/mapping.
 impl PageTable {
     /// Create a new page table
@@ -235,6 +241,10 @@ impl UserBuffer {
             total += b.len();
         }
         total
+    }
+    /// empty ?
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 

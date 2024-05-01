@@ -36,11 +36,22 @@ pub fn sys_thread_create(entry: usize, arg: usize) -> isize {
     let new_task_tid = new_task_res.tid;
     let mut process_inner = process.inner_exclusive_access();
     // add new thread to current process
-    let tasks = &mut process_inner.tasks;
-    while tasks.len() < new_task_tid + 1 {
-        tasks.push(None);
+    while process_inner.tasks.len() < new_task_tid + 1 {
+        process_inner.tasks.push(None);
+        process_inner.allocation_mutex.push(None);
+        process_inner.allocation_sem.push(None);
+        process_inner.need_mutex.push(None);
+        process_inner.need_sem.push(None);
     }
-    tasks[new_task_tid] = Some(Arc::clone(&new_task));
+    process_inner.tasks[new_task_tid] = Some(Arc::clone(&new_task));
+    // use available matrix
+    let mutex_start = process_inner.avaiable_mutex_start();
+    let sem_start = process_inner.avaiable_sem_start();
+    process_inner.allocation_mutex[new_task_tid] = Some(mutex_start.clone());
+    process_inner.allocation_sem[new_task_tid] = Some(sem_start.clone());
+    process_inner.need_mutex[new_task_tid] = Some(mutex_start.clone());
+    process_inner.need_sem[new_task_tid] = Some(sem_start.clone());
+
     let new_task_trap_cx = new_task_inner.get_trap_cx();
     *new_task_trap_cx = TrapContext::app_init_context(
         entry,
@@ -49,7 +60,7 @@ pub fn sys_thread_create(entry: usize, arg: usize) -> isize {
         new_task.kstack.get_top(),
         trap_handler as usize,
     );
-    (*new_task_trap_cx).x[10] = arg;
+    new_task_trap_cx.x[10] = arg;
     new_task_tid as isize
 }
 /// get current thread id syscall
@@ -112,6 +123,10 @@ pub fn sys_waittid(tid: usize) -> i32 {
     if let Some(exit_code) = exit_code {
         // dealloc the exited thread
         process_inner.tasks[tid] = None;
+        process_inner.allocation_mutex[tid] = None;
+        process_inner.allocation_sem[tid] = None;
+        process_inner.need_mutex[tid] = None;
+        process_inner.need_sem[tid] = None;
         exit_code
     } else {
         // waited thread has not exited
